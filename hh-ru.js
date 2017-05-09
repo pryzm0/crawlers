@@ -10,6 +10,8 @@ const sqlite3 = require('sqlite3');
 const BASEURL = 'https://samara.hh.ru/search/resume?exp_period=all_time&order_by=publication_time&area=113&text=%D0%9F%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%81%D1%82&pos=full_text&logic=normal&clusters=true&page=0';
 const TIMEOUT = 2*1000;
 
+const db = new sqlite3.Database('./hh.db');
+
 
 function fetch(url, callback) {
   request(url, (error, response, body) => {
@@ -98,6 +100,30 @@ function fetchSerpDoc(targetUrl, callback) {
   });
 }
 
+function persist(schema, uri, callback) {
+  if (schema.length) {
+    const query = 'INSERT INTO resumes (property, value, uri) VALUES ' +
+      '(?, ?, ?), '.repeat(Math.max(0, schema.length - 1)) + '(?, ?, ?)';
+    const args = [].concat.apply([], schema.map(pair => {
+      return [].concat(pair, [uri]);
+    }));
+    db.run(query, args, ((error) => {
+      if (error) {
+        console.log('>> FAIL', error);
+        callback();
+      }
+      else {
+        console.log('>> persisted', schema.length, 'items', uri);
+        callback();
+      }
+    }));
+  }
+  else {
+    console.log('>> empty', uri);
+    callback();
+  }
+}
+
 let q = async.queue(function(task, callback) {
   console.log('>> TASK', task.type, task.uri);
   if (task.type === 'serp') {
@@ -127,15 +153,14 @@ let q = async.queue(function(task, callback) {
   }
   else if (task.type === 'resume') {
     setTimeout(() => {
-      fetchResumeDoc(task.uri, (error, doc) => {
+      fetchResumeDoc(task.uri, (error, schema) => {
         if (error) {
           console.log('>> resume: error:', error);
           callback();
         }
         else {
-          console.log('>> result');
-          console.log(doc);
-          callback();
+          console.log('>> got results', schema.length);
+          persist(schema, task.uri, callback);
         }
       });
     }, TIMEOUT);
