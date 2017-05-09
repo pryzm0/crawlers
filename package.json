@@ -1,0 +1,19 @@
+{
+  "name": "raiffeisen-exchange-rage",
+  "version": "1.0.0",
+  "description": "Fetch Raiffeisen currency exchange rate",
+  "main": "fetch.js",
+  "dependencies": {
+    "async": "^2.4.0",
+    "cheerio": "^0.22.0",
+    "iconv-lite": "^0.4.17",
+    "request": "^2.79.0",
+    "sqlite3": "^3.1.8"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
