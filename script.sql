@@ -1,7 +1,1 @@
-CREATE TABLE `resumes` (
-	`id`	INTEGER PRIMARY KEY AUTOINCREMENT,
-	`property`	TEXT,
-	`value`	TEXT,
-	`uri`	TEXT
-);
-
+CREATE TABLE resumes (id INTEGER PRIMARY KEY, property VARCHAR(32) NOT NULL, value TEXT NOT NULL, uri VARCHAR(128) NOT NULL);
