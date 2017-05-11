@@ -1,1 +1,19 @@
-CREATE TABLE resumes (id INTEGER PRIMARY KEY, property VARCHAR(32) NOT NULL, value TEXT NOT NULL, uri VARCHAR(128) NOT NULL);
+CREATE TABLE dataSchema (
+	id INTEGER PRIMARY KEY,
+	uri VARCHAR(128) NOT NULL,
+	property VARCHAR(32) NOT NULL,
+	value TEXT NOT NULL);
+CREATE TABLE dataCustom (
+	id INTEGER PRIMARY KEY,
+	uri VARCHAR(128) NOT NULL,
+	about TEXT NOT NULL,
+	info TEXT NOT NULL,
+	resume TEXT NOT NULL,
+	lang TEXT NOT NULL,
+	education TEXT NOT NULL,
+	workSkills TEXT NOT NULL,
+	position TEXT NOT NULL,
+	salary TEXT NOT NULL,
+	specialization TEXT NOT NULL,
+	experience TEXT NOT NULL,
+	skills TEXT NOT NULL);
