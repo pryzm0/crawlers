@@ -5,12 +5,11 @@ const iconv = require('iconv-lite');
 const url = require('url');
 const sqlite3 = require('sqlite3');
 
-// const BASEURL = 'https://samara.hh.ru/resume/19c8e9510002511e100039ed1f637a6865546e?query=%D0%9F%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%81%D1%82';
-// const BASEURL = 'https://samara.hh.ru/resume/fd8c0662000307a7180039ed1f62576b38676a?query=%D0%9F%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%81%D1%82';
-const BASEURL = 'https://samara.hh.ru/search/resume?exp_period=all_time&order_by=publication_time&area=113&text=%D0%9F%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%81%D1%82&pos=full_text&logic=normal&clusters=true&page=0';
-const TIMEOUT = 2*1000;
+// const BASEURL = 'https://samara.hh.ru/resume/697563de000336c85a0039ed1f303134497537';
+const BASEURL = 'https://samara.hh.ru/search/resume?exp_period=all_time&order_by=publication_time&text=%D0%9F%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%81%D1%82&pos=full_text&logic=normal&clusters=true&page=127';
+const TIMEOUT = 20*1000;
 
-const db = new sqlite3.Database('./hh.db');
+const db = new sqlite3.Database('./out.db');
 
 
 function fetch(url, callback) {
@@ -27,17 +26,18 @@ function fetch(url, callback) {
 
 function walkDom(el, callback) {
   callback(el);
-  for (var c = el.firstChild; c; c = c.nextSibling) {
-    walkDom(c, callback);
+  for (let node = el.firstChild; node != null; node = node.nextSibling) {
+    walkDom(node, callback);
   }
 }
 
 function domToString(el) {
-  var textNodes = [];
-  walkDom(el, c => {
-    if (c.nodeType === 3) {
-      // console.log('>> text node', c);
-      textNodes.push(c.data);
+  let textNodes = [];
+  !el || walkDom(el, node => {
+    if (node) {
+      if (node.nodeType === 3) {
+        textNodes.push(node.data);
+      }
     }
   });
   return textNodes.join(' ');
@@ -56,10 +56,7 @@ function fetchResumeDoc(targetUrl, callback) {
       return [el.attribs['itemtype'], domToString(el)];
     });
 
-    callback(null, schema);
-
-    /*
-    const about = $('.resume-header-block p').map((k, el) => $(el).text()).get().join('\n');
+    const about = $('.resume-header-block p').map((k, el) => $(el).text()).get();
     const position = $('[data-qa="resume-block-title-position"]').text();
     const salary = $('[data-qa="resume-block-salary"]').text();
     const specialization = $('[data-qa="resume-block-specialization-category"]').text();
@@ -67,10 +64,23 @@ function fetchResumeDoc(targetUrl, callback) {
     const info = $('.resume-block .bloko-gap_bottom ~ p').map((k, el) => $(el).text()).get();
     const resume = $('.resume-block-item-gap[itemprop="worksFor"]').map((k, el) => domToString(el)).get();
     const education = $('.resume-block-item-gap[data-qa="resume-block-education"]').map((k, el) => domToString(el)).get();
-    const workSkills = $('[data-qa="bloko-tag__text"]').text();
-    const skills = $('[data-qa="resume-block-skills"]').text();
+    const workSkills = $('[data-qa="bloko-tag__text"]').map((k, el) => domToString(el)).get();
+    const skills = domToString($('[data-qa="resume-block-skills"]').get(0));
     const lang = $('[data-qa="resume-block-language-item"]').map((k, el) => $(el).text()).get();
-    */
+
+    callback(null, {
+      schema,
+      custom: {
+        about: about.join('\n'),
+        info: info.join('\n'),
+        resume: resume.join('\n\n'),
+        lang: lang.join('\n'),
+        education: education.join('\n'),
+        workSkills: workSkills.join('\n'),
+        position, salary, specialization,
+        experience, skills
+      }
+    });
   });
 }
 
@@ -100,28 +110,54 @@ function fetchSerpDoc(targetUrl, callback) {
   });
 }
 
-function persist(schema, uri, callback) {
+function persistCustom(custom, uri, callback) {
+  const query = 'INSERT INTO dataCustom ' +
+    '(about, info, resume, lang, education, workSkills, position, salary, specialization, experience, skills, uri) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+  const args = [
+    custom.about, custom.info, custom.resume, custom.lang, custom.education,
+    custom.workSkills, custom.position, custom.salary, custom.specialization,
+    custom.experience, custom.skills, uri];
+  db.run(query, args, ((error) => {
+    if (error) {
+      console.log('>> persist custom: fail:', error);
+      callback();
+    }
+    else {
+      callback();
+    }
+  }));
+}
+
+function persistSchema(schema, uri, callback) {
   if (schema.length) {
-    const query = 'INSERT INTO resumes (property, value, uri) VALUES ' +
+    const query = 'INSERT INTO dataSchema (property, value, uri) VALUES ' +
       '(?, ?, ?), '.repeat(Math.max(0, schema.length - 1)) + '(?, ?, ?)';
     const args = [].concat.apply([], schema.map(pair => {
       return [].concat(pair, [uri]);
     }));
     db.run(query, args, ((error) => {
       if (error) {
-        console.log('>> FAIL', error);
+        console.log('>> persist schema: fail:', error);
         callback();
       }
       else {
-        console.log('>> persisted', schema.length, 'items', uri);
         callback();
       }
     }));
   }
   else {
-    console.log('>> empty', uri);
     callback();
   }
+}
+
+function persist(doc, uri, callback) {
+  persistSchema(doc.schema, uri, () => {
+    persistCustom(doc.custom, uri, () => {
+      console.log('>> persist ok');
+      callback();
+    });
+  });
 }
 
 let q = async.queue(function(task, callback) {
@@ -134,6 +170,7 @@ let q = async.queue(function(task, callback) {
           return callback();
         }
         else {
+          console.log('>> ok');
           doc.results.forEach(href => {
             q.push({
               type: 'resume',
@@ -153,14 +190,14 @@ let q = async.queue(function(task, callback) {
   }
   else if (task.type === 'resume') {
     setTimeout(() => {
-      fetchResumeDoc(task.uri, (error, schema) => {
+      fetchResumeDoc(task.uri, (error, doc) => {
         if (error) {
           console.log('>> resume: error:', error);
           callback();
         }
         else {
-          console.log('>> got results', schema.length);
-          persist(schema, task.uri, callback);
+          console.log('>> ok');
+          persist(doc, task.uri, callback);
         }
       });
     }, TIMEOUT);
